@@ -170,7 +170,7 @@ jobs:
           verbose: true
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         if: matrix.coverage != false
         with:
           disable_search: true
