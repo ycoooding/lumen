@@ -1,0 +1,65 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# JetBrains IDE
+.idea/
+
+# VSCode IDE
+.vscode/
+
+# build directories
+build/
+build-lumen/
+cmake-*/
+docs/doxyconfig*
+
+# npm
+node_modules/
+package-lock.json
+
+# Translations
+*.mo
+*.pot
+
+# Dummy macOS files
+.DS_Store
+
+# Python
+*.pyc
+venv/
+
+# Lumen local-only tools and test artifacts
+tools/lumen-keygen.html
+lumen_state.json
+test_sunshine*.log
+write_file_test_*.txt

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+
+<head>
+  <%- header %>
+</head>
+
+<body id="app" class="d-flex flex-column min-vh-100" v-cloak>
+  <Navbar></Navbar>
+  <div id="content" class="container d-flex flex-column flex-grow-1">
+    <h1 class="my-4">{{ $t('index.welcome') }}</h1>
+    <p>{{ $t('index.description') }}</p>
+    <div class="alert alert-danger" v-if="fancyLogs.find(x => x.level === 'Fatal')">
+      <div style="line-height: 32px;">
+        <i class="fas fa-circle-exclamation" style="font-size: 32px;margin-right: 0.25em;"></i>
+        <p v-html="$t('index.startup_errors')"></p>
+        <br>
+      </div>
+      <ul>
+        <li v-for="v in fancyLogs.filter(x => x.level === 'Fatal')">{{v.value}}</li>
+      </ul>
+      <a class="btn btn-danger" href="./troubleshooting#logs">View Logs</a>
+    </div>
+    <!-- Version -->
+    <div class="card p-2 my-4">
+      <div class="card-body" v-if="version">
+        <h2>Version {{ version }}</h2>
+      </div>
+    </div>
+    <Resource-Card></Resource-Card>
+  </div>
+</body>
+
+<script type="module">
+  import { createApp } from 'vue'
+  import { initApp } from './init'
+  import Navbar from './Navbar.vue'
+  import ResourceCard from './ResourceCard.vue'
+
+  console.log("Hello, Lumen!")
+  let app = createApp({
+    components: {
+      Navbar,
+      ResourceCard
+    },
+    data() {
+      return {
+        version: null,
+        logs: null,
+      }
+    },
+    async created() {
+      try {
+        let config = await fetch("./api/config").then((r) => r.json());
+        this.version = config.version;
+        console.log("Version: ", this.version)
+      } catch (e) {
+        console.error(e);
+      }
+      try {
+        this.logs = (await fetch("./api/logs").then(r => r.text()))
+      } catch (e) {
+        console.error(e);
+      }
+    },
+    computed: {
+      /** Parse the text errors, calculating the text, the timestamp and the level */
+      fancyLogs() {
+        if (!this.logs) return [];
+        let regex = /(\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}]):\s/g;
+        let rawLogLines = (this.logs.split(regex)).splice(1);
+        let logLines = []
+        for (let i = 0; i < rawLogLines.length; i += 2) {
+          logLines.push({ timestamp: rawLogLines[i], level: rawLogLines[i + 1].split(":")[0], value: rawLogLines[i + 1] });
+        }
+        return logLines;
+      }
+    }
+  });
+
+  initApp(app);
+</script>
