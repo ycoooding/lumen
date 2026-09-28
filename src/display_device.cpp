@@ -51,16 +51,6 @@ namespace display_device {
       return device.m_friendly_name == VDD_FRIENDLY_NAME;
     }
 
-    std::optional<std::string> find_virtual_output(const EnumeratedDeviceList &devices) {
-      const auto device = std::ranges::find_if(devices, [](const EnumeratedDevice &device) {
-        return device.m_info.has_value() && is_vdd_device(device);
-      });
-      if (device == devices.end()) {
-        return std::nullopt;
-      }
-      return device->m_device_id;
-    }
-
     /**
      * @brief Helper class for capturing audio context when the API demands it.
      *
@@ -792,12 +782,21 @@ namespace display_device {
     });
   }
 
-  void configure_display(const config::video_t &video_config, const rtsp_stream::launch_session_t &session) {
+  bool configure_display(const config::video_t &video_config, const rtsp_stream::launch_session_t &session) {
     auto effective_config = video_config;
+    bool using_vdd = false;
+    rtsp_stream::launch_session_t effective_session {};
+    effective_session.width = session.width;
+    effective_session.height = session.height;
+    effective_session.fps = session.fps;
+    effective_session.enable_hdr = session.enable_hdr;
+    effective_session.enable_sops = session.enable_sops;
+
+    // Cancel an old restore/apply task before creating or rebuilding the monitor.
+    cancel_pending_configuration();
 
 #ifdef _WIN32
     std::string runtime_output;
-    bool using_vdd = false;
     const bool force_vdd = video_config.output_name == VDD_OUTPUT_NAME;
 
     if (video_config.output_name.empty() || force_vdd) {
@@ -807,11 +806,40 @@ namespace display_device {
         runtime_output = *physical_output;
         BOOST_LOG(info) << "Automatic display selection chose physical display: " << runtime_output;
       } else {
-        if (session.width > 0 && session.height > 0 && session.fps > 0) {
-          std::ignore = platf::vdd::set_mode(session.width, session.height, session.fps);
+        // Older clients can omit "mode" on resume. Retain a usable default
+        // instead of passing the protocol's 0x0x0 sentinel to the driver.
+        if (effective_session.width == 0) {
+          effective_session.width = 1920;
+        }
+        if (effective_session.height == 0) {
+          effective_session.height = 1080;
+        }
+        if (effective_session.fps == 0) {
+          effective_session.fps = 60;
+        }
+        if (!platf::vdd::ready() || !platf::vdd::set_mode(effective_session.width, effective_session.height, effective_session.fps)) {
+          return false;
         }
 
-        auto virtual_output = find_virtual_output(devices);
+        // SETMODES may re-enumerate the monitor, particularly on Windows 10.
+        // Inactive devices must be found too: applySettings will activate them.
+        auto virtual_output = find_virtual_output(enumerate_devices());
+        if (virtual_output && platf::vdd::owns_monitor() &&
+            !platf::vdd::mode_available(map_output_name(*virtual_output), effective_session.width, effective_session.height, effective_session.fps)) {
+          // New target modes alone may leave cached monitor-description modes
+          // unchanged. Rebuild an owned monitor, as the current upstream does.
+          if (!platf::vdd::destroy_monitor()) {
+            return false;
+          }
+          for (int attempt = 0; attempt < 20 && virtual_output; ++attempt) {
+            std::this_thread::sleep_for(std::chrono::milliseconds {200});
+            virtual_output = find_virtual_output(enumerate_devices());
+          }
+          if (virtual_output) {
+            BOOST_LOG(error) << "Timed out waiting for the previous virtual display to depart";
+            return false;
+          }
+        }
         if (!virtual_output && platf::vdd::create_monitor()) {
           constexpr auto retry_delay = std::chrono::milliseconds {200};
           for (int attempt = 0; attempt < 20 && !virtual_output; ++attempt) {
@@ -829,6 +857,7 @@ namespace display_device {
           BOOST_LOG(error) << (force_vdd ? "The forced Lumen virtual display" :
                                          "No physical display is active and the Lumen virtual display")
                            << " could not be created";
+          return false;
         }
       }
     }
@@ -845,22 +874,63 @@ namespace display_device {
       // The VDD is session-owned, so mode changes do not affect a physical display.
       effective_config.dd.resolution_option = config::video_t::dd_t::resolution_option_e::automatic;
       effective_config.dd.refresh_rate_option = config::video_t::dd_t::refresh_rate_option_e::automatic;
+      if (effective_config.dd.configuration_option == config::video_t::dd_t::config_option_e::disabled) {
+        effective_config.dd.configuration_option = config::video_t::dd_t::config_option_e::ensure_active;
+      }
     }
 #endif
 
-    const auto result {parse_configuration(effective_config, session)};
+    if (using_vdd) {
+      // Client mode adaptation is intrinsic to the virtual display, even when
+      // Moonlight's physical-display "Optimize game settings" option is off.
+      effective_session.enable_sops = true;
+    }
+    const auto result {parse_configuration(effective_config, effective_session)};
     if (const auto *parsed_config {std::get_if<SingleDisplayConfiguration>(&result)}; parsed_config) {
+      if (using_vdd) {
+        // Finish topology/mode changes before encoder probing. Never schedule a
+        // later change that could tear down a display under an active stream.
+        std::lock_guard lock {DD_DATA.mutex};
+        if (!DD_DATA.sm_instance) {
+          return false;
+        }
+        for (int attempt = 0; attempt < 20; ++attempt) {
+          const auto applied = DD_DATA.sm_instance->execute([&](auto &settings_iface) {
+            return settings_iface.applySettings(*parsed_config);
+          });
+          if (applied == SettingsManagerInterface::ApplyResult::Ok) {
+            return true;
+          }
+          if (applied != SettingsManagerInterface::ApplyResult::ApiTemporarilyUnavailable) {
+            BOOST_LOG(error) << "Failed to activate the Lumen virtual display. Check the GPU driver and Windows display configuration.";
+            return false;
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds {200});
+        }
+        BOOST_LOG(error) << "Timed out preparing the Lumen virtual display";
+        return false;
+      }
       configure_display(*parsed_config);
-      return;
+      return true;
     }
 
     if (const auto *disabled {std::get_if<configuration_disabled_tag_t>(&result)}; disabled) {
       revert_configuration();
-      return;
+      return true;
     }
 
     // Error already logged for failed_to_parse_tag_t case, and we also don't
     // want to revert active configuration in case we have any
+    return false;
+  }
+
+  void cancel_pending_configuration() {
+    std::lock_guard lock {DD_DATA.mutex};
+    if (DD_DATA.sm_instance) {
+      DD_DATA.sm_instance->execute([](auto &, auto &stop_token) {
+        stop_token.requestStop();
+      });
+    }
   }
 
   void configure_display(const SingleDisplayConfiguration &config) {
@@ -911,6 +981,14 @@ namespace display_device {
     return DD_DATA.sm_instance->execute([](auto &settings_iface) {
       return settings_iface.enumAvailableDevices();
     });
+  }
+
+  std::optional<std::string> find_virtual_output(const EnumeratedDeviceList &devices) {
+    const auto device = std::ranges::find_if(devices, is_vdd_device);
+    if (device == devices.end()) {
+      return std::nullopt;
+    }
+    return device->m_device_id;
   }
 
   std::optional<std::string> find_active_physical_output(const EnumeratedDeviceList &devices) {

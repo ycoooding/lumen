@@ -49,7 +49,7 @@ else()
         )
         # Check if Dirty
         execute_process(
-                COMMAND ${GIT_EXECUTABLE} diff --quiet --exit-code
+                COMMAND ${GIT_EXECUTABLE} diff --quiet --exit-code --ignore-submodules
                 RESULT_VARIABLE GIT_IS_DIRTY
                 OUTPUT_STRIP_TRAILING_WHITESPACE
         )

@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20)
 # `cmake_path(CONVERT ... TO_NATIVE_PATH_LIST ...)` requires 3.20
 # todo - set this conditionally
 
-project(Lumen VERSION 1.0.0
+project(Lumen VERSION 1.1.0
         DESCRIPTION "Self-hosted game stream host for Moonlight")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

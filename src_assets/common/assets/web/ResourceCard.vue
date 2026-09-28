@@ -1,11 +1,11 @@
 <template>
     <footer class="text-center text-body-secondary opacity-75 mt-auto pt-4 pb-2 px-3" style="font-size: .75rem">
         <p class="mb-0">
-            <a class="link-secondary" href="https://github.com/ycoooding/lumen/tree/v1.0.0" target="_blank" rel="noopener noreferrer">{{ $t('resource_card.source_code') }}</a>
+            <a class="link-secondary" href="https://github.com/ycoooding/lumen/tree/v1.1.0" target="_blank" rel="noopener noreferrer">{{ $t('resource_card.source_code') }}</a>
             <span class="mx-2">·</span>
-            <a class="link-secondary" href="https://github.com/ycoooding/lumen/blob/v1.0.0/LICENSE" target="_blank" rel="noopener noreferrer">{{ $t('resource_card.license') }}</a>
+            <a class="link-secondary" href="https://github.com/ycoooding/lumen/blob/v1.1.0/LICENSE" target="_blank" rel="noopener noreferrer">{{ $t('resource_card.license') }}</a>
             <span class="mx-2">·</span>
-            <a class="link-secondary" href="https://github.com/ycoooding/lumen/blob/v1.0.0/NOTICE" target="_blank" rel="noopener noreferrer">{{ $t('resource_card.third_party_notice') }}</a>
+            <a class="link-secondary" href="https://github.com/ycoooding/lumen/blob/v1.1.0/NOTICE" target="_blank" rel="noopener noreferrer">{{ $t('resource_card.third_party_notice') }}</a>
         </p>
     </footer>
 </template>

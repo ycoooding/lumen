@@ -3,31 +3,37 @@
  * @brief Control transport for the bundled ZakoVDD driver.
  */
 #define WIN32_LEAN_AND_MEAN
+// SetupAPI requires the base Windows types to be included first.
+// clang-format off
 #include <Windows.h>
 #include <SetupAPI.h>
 #include <winioctl.h>
-
-#include <array>
-#include <filesystem>
-#include <fstream>
-#include <mutex>
-#include <regex>
-#include <sstream>
-#include <string>
-#include <vector>
+// clang-format on
 
 #include "vdd.h"
 
 #include "src/logging.h"
+#include "vdd_mode.h"
+
+#include <array>
+#include <boost/property_tree/xml_parser.hpp>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace platf::vdd {
   namespace {
-    // Must match Common/Include/vdd_control_ioctl.h in ZakoVDD v0.16.2.
+    // Must match Common/Include/vdd_control_ioctl.h in ZakoVDD v0.17.5 (Win11) and v0.15.10 (Win10).
     constexpr GUID control_interface {
-      0xDA9F8C2B, 0x7E4F, 0x49A1, {0x9D, 0x4E, 0x6F, 0x2B, 0x0E, 0x1A, 0x0C, 0x4D}
+      0xDA9F8C2B,
+      0x7E4F,
+      0x49A1,
+      {0x9D, 0x4E, 0x6F, 0x2B, 0x0E, 0x1A, 0x0C, 0x4D}
     };
     constexpr DWORD ioctl_command = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_WRITE_DATA);
-    constexpr auto legacy_pipe = L"\\\\.\\pipe\\ZakoVDDPipe";
+    constexpr DWORD ioctl_ping = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_ACCESS);
 
     enum class command_result {
       success,
@@ -40,14 +46,18 @@ namespace platf::vdd {
 
     class device_info_guard {
     public:
-      explicit device_info_guard(HDEVINFO handle): handle_ {handle} {}
+      explicit device_info_guard(HDEVINFO handle):
+          handle_ {handle} {}
+
       ~device_info_guard() {
         if (handle_ != INVALID_HANDLE_VALUE) {
           SetupDiDestroyDeviceInfoList(handle_);
         }
       }
 
-      HDEVINFO get() const { return handle_; }
+      HDEVINFO get() const {
+        return handle_;
+      }
 
     private:
       HDEVINFO handle_;
@@ -55,7 +65,11 @@ namespace platf::vdd {
 
     std::wstring find_control_path() {
       const auto raw = SetupDiGetClassDevsW(
-        &control_interface, nullptr, nullptr, DIGCF_DEVICEINTERFACE | DIGCF_PRESENT);
+        &control_interface,
+        nullptr,
+        nullptr,
+        DIGCF_DEVICEINTERFACE | DIGCF_PRESENT
+      );
       if (raw == INVALID_HANDLE_VALUE) {
         return {};
       }
@@ -77,31 +91,51 @@ namespace platf::vdd {
       auto *detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W *>(buffer.data());
       detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
       if (!SetupDiGetDeviceInterfaceDetailW(
-            devices.get(), &interface_data, detail, required_size, nullptr, nullptr)) {
+            devices.get(),
+            &interface_data,
+            detail,
+            required_size,
+            nullptr,
+            nullptr
+          )) {
         return {};
       }
       return detail->DevicePath;
     }
 
-    command_result send_ioctl_command(const std::wstring &command) {
+    command_result send_ioctl_command(const std::wstring &command, DWORD code = ioctl_command) {
       const auto path = find_control_path();
       if (path.empty()) {
+        BOOST_LOG(error) << "Lumen virtual display control interface is unavailable. Run the Lumen installer to repair the driver.";
         return command_result::interface_missing;
       }
 
       const HANDLE device = CreateFileW(
-        path.c_str(), GENERIC_READ | GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+        path.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        OPEN_EXISTING,
+        SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION,
+        nullptr
+      );
       if (device == INVALID_HANDLE_VALUE) {
         BOOST_LOG(error) << "Failed to open the Lumen virtual display driver: " << GetLastError();
         return command_result::failed;
       }
 
       DWORD returned = 0;
-      const DWORD bytes = static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t));
+      const DWORD bytes = code == ioctl_ping ? 0 : static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t));
       const BOOL ok = DeviceIoControl(
-        device, ioctl_command, const_cast<wchar_t *>(command.c_str()), bytes,
-        nullptr, 0, &returned, nullptr);
+        device,
+        code,
+        bytes ? const_cast<wchar_t *>(command.c_str()) : nullptr,
+        bytes,
+        nullptr,
+        0,
+        &returned,
+        nullptr
+      );
       const DWORD win_error = ok ? ERROR_SUCCESS : GetLastError();
       CloseHandle(device);
 
@@ -112,58 +146,11 @@ namespace platf::vdd {
       return command_result::success;
     }
 
-    bool send_pipe_command(const std::wstring &command) {
-      for (int attempt = 0; attempt < 10; ++attempt) {
-        const HANDLE pipe = CreateFileW(
-          legacy_pipe, GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-          OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
-        if (pipe == INVALID_HANDLE_VALUE) {
-          WaitNamedPipeW(legacy_pipe, 200);
-          Sleep(200);
-          continue;
-        }
-
-        OVERLAPPED overlapped {};
-        overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-        if (!overlapped.hEvent) {
-          CloseHandle(pipe);
-          return false;
-        }
-        const DWORD bytes = static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t));
-        DWORD written = 0;
-        BOOL ok = WriteFile(pipe, command.c_str(), bytes, &written, &overlapped);
-        if (!ok && GetLastError() == ERROR_IO_PENDING) {
-          ok = WaitForSingleObject(overlapped.hEvent, 3000) == WAIT_OBJECT_0 &&
-               GetOverlappedResult(pipe, &overlapped, &written, FALSE);
-        }
-        if (!ok) {
-          CancelIo(pipe);
-        } else {
-          // The old driver executes the command on its pipe thread immediately after reading it.
-          Sleep(100);
-        }
-        CloseHandle(overlapped.hEvent);
-        CloseHandle(pipe);
-        return ok;
-      }
-
-      BOOST_LOG(error) << "Lumen virtual display legacy control pipe was not found";
-      return false;
-    }
-
     bool send_command(const std::wstring &command) {
-      switch (send_ioctl_command(command)) {
-        case command_result::success:
-          return true;
-        case command_result::failed:
-          return false;
-        case command_result::interface_missing:
-          return send_pipe_command(command);
-      }
-      return false;
+      return send_ioctl_command(command) == command_result::success;
     }
 
-    std::filesystem::path legacy_settings_path() {
+    std::filesystem::path settings_path() {
       std::array<wchar_t, MAX_PATH> module_path {};
       const auto length = GetModuleFileNameW(nullptr, module_path.data(), module_path.size());
       if (length == 0 || length == module_path.size()) {
@@ -172,97 +159,88 @@ namespace platf::vdd {
       return std::filesystem::path {module_path.data()}.parent_path() / "config" / "vdd_settings.xml";
     }
 
-    bool update_legacy_mode(int width, int height, int fps) {
-      const auto settings_path = legacy_settings_path();
-      std::ifstream input {settings_path, std::ios::binary};
-      if (!input) {
-        BOOST_LOG(error) << "Unable to open the Lumen virtual display settings: " << settings_path.string();
-        return false;
-      }
-
-      std::string xml {std::istreambuf_iterator<char> {input}, std::istreambuf_iterator<char> {}};
-      bool changed = false;
-
-      const std::regex refresh_pattern {
-        "<g_refresh_rate>\\s*" + std::to_string(fps) + "\\s*</g_refresh_rate>"
-      };
-      if (!std::regex_search(xml, refresh_pattern)) {
-        const auto global_end = xml.find("</global>");
-        if (global_end == std::string::npos) {
-          return false;
+    std::vector<mode_t> configured_modes() {
+      std::vector<mode_t> modes;
+      try {
+        std::ifstream input {settings_path()};
+        boost::property_tree::ptree tree;
+        boost::property_tree::read_xml(input, tree);
+        std::vector<int> global_rates;
+        if (const auto global = tree.get_child_optional("vdd_settings.global")) {
+          for (const auto &[name, rate] : *global) {
+            if (name == "g_refresh_rate") {
+              global_rates.push_back(rate.get_value<int>());
+            }
+          }
         }
-        xml.insert(global_end, "        <g_refresh_rate>" + std::to_string(fps) + "</g_refresh_rate>\r\n    ");
-        changed = true;
-      }
-
-      const std::regex resolution_pattern {
-        "<resolution>\\s*<width>\\s*" + std::to_string(width) +
-        "\\s*</width>\\s*<height>\\s*" + std::to_string(height) + "\\s*</height>"
-      };
-      if (!std::regex_search(xml, resolution_pattern)) {
-        const auto resolutions_end = xml.find("</resolutions>");
-        if (resolutions_end == std::string::npos) {
-          return false;
+        for (const auto &[name, resolution] : tree.get_child("vdd_settings.resolutions")) {
+          if (name != "resolution") {
+            continue;
+          }
+          const int width = resolution.get<int>("width");
+          const int height = resolution.get<int>("height");
+          for (const int fps : global_rates) {
+            modes.push_back({width, height, fps});
+          }
+          for (const auto &[entry, rate] : resolution) {
+            if (entry == "refresh_rate") {
+              modes.push_back({width, height, rate.get_value<int>()});
+            }
+          }
         }
-        std::ostringstream mode;
-        mode << "        <resolution>\r\n"
-             << "            <width>" << width << "</width>\r\n"
-             << "            <height>" << height << "</height>\r\n"
-             << "            <refresh_rate>" << fps << "</refresh_rate>\r\n"
-             << "        </resolution>\r\n    ";
-        xml.insert(resolutions_end, mode.str());
-        changed = true;
+      } catch (const std::exception &err) {
+        BOOST_LOG(warning) << "Unable to read virtual display modes: " << err.what();
       }
-
-      if (!changed) {
-        return true;
+      if (modes.empty()) {
+        modes.push_back({1920, 1080, 60});
       }
-
-      auto temporary_path = settings_path;
-      temporary_path += ".lumen.tmp";
-      {
-        std::ofstream output {temporary_path, std::ios::binary | std::ios::trunc};
-        output.write(xml.data(), static_cast<std::streamsize>(xml.size()));
-        if (!output) {
-          return false;
-        }
-      }
-      if (!MoveFileExW(temporary_path.c_str(), settings_path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        std::filesystem::remove(temporary_path);
-        return false;
-      }
-      return true;
+      return modes;
     }
   }  // namespace
 
-  bool set_mode(int width, int height, int fps) {
-    if (width <= 0 || height <= 0 || width > 16384 || height > 16384 || fps <= 0 || fps > 1000) {
-      BOOST_LOG(warning) << "Ignoring invalid virtual display mode: " << width << 'x' << height << '@' << fps;
+  bool ready() {
+    std::lock_guard lock {control_mutex};
+    return send_ioctl_command({}, ioctl_ping) == command_result::success;
+  }
+
+  bool mode_available(const std::string &display_name, int width, int height, int fps) {
+    if (display_name.empty()) {
       return false;
     }
-
-    std::wostringstream command;
-    command << L"SETMODES " << width << L'x' << height << L'x' << fps;
-    std::lock_guard lock {control_mutex};
-    switch (send_ioctl_command(command.str())) {
-      case command_result::success:
+    const std::wstring name {display_name.begin(), display_name.end()};
+    DEVMODEW current {};
+    current.dmSize = sizeof(current);
+    const bool rotated = EnumDisplaySettingsW(name.c_str(), ENUM_CURRENT_SETTINGS, &current) &&
+                         (current.dmFields & DM_DISPLAYORIENTATION) &&
+                         (current.dmDisplayOrientation == DMDO_90 || current.dmDisplayOrientation == DMDO_270);
+    for (DWORD index = 0; index < 4096; ++index) {
+      DEVMODEW mode {};
+      mode.dmSize = sizeof(mode);
+      if (!EnumDisplaySettingsW(name.c_str(), index, &mode)) {
+        break;
+      }
+      const bool matches = mode.dmPelsWidth == static_cast<DWORD>(width) && mode.dmPelsHeight == static_cast<DWORD>(height);
+      const bool rotated_match = rotated && mode.dmPelsWidth == static_cast<DWORD>(height) && mode.dmPelsHeight == static_cast<DWORD>(width);
+      if ((matches || rotated_match) && std::abs(static_cast<int>(mode.dmDisplayFrequency) - fps) <= 1) {
         return true;
-      case command_result::failed:
-        return false;
-      case command_result::interface_missing:
-        if (!update_legacy_mode(width, height, fps)) {
-          return false;
-        }
-        return send_pipe_command(L"RELOAD_DRIVER");
+      }
     }
     return false;
   }
 
+  bool set_mode(int width, int height, int fps) {
+    const auto command = mode_command(configured_modes(), {width, height, fps});
+    if (!command) {
+      BOOST_LOG(error) << "Invalid virtual display mode or mode list exceeds the driver command buffer";
+      return false;
+    }
+    std::lock_guard lock {control_mutex};
+    return send_command(*command);
+  }
+
   bool create_monitor() {
     std::lock_guard lock {control_mutex};
-    if (monitor_owned) {
-      return true;
-    }
+    // Enumeration is checked by the caller; a driver restart may have removed an owned monitor.
     if (!send_command(L"CREATEMONITOR")) {
       return false;
     }

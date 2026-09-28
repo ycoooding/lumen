@@ -4,7 +4,11 @@
  */
 #pragma once
 
+#include <string>
+
 namespace platf::vdd {
+  bool ready();
+  bool mode_available(const std::string &display_name, int width, int height, int fps);
   bool set_mode(int width, int height, int fps);
   bool create_monitor();
   bool destroy_monitor();

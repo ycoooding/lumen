@@ -4,6 +4,16 @@
 set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/lumen.ico")
 set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/lumen.ico")
 
+# Expose the same release version in Windows Explorer for the installer itself.
+set(_lumen_nsis_version_info "
+VIProductVersion '${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.0'
+VIAddVersionKey /LANG=1033 'ProductName' 'Lumen'
+VIAddVersionKey /LANG=1033 'ProductVersion' '${PROJECT_VERSION}'
+VIAddVersionKey /LANG=1033 'FileVersion' '${PROJECT_VERSION}'
+VIAddVersionKey /LANG=1033 'FileDescription' 'Lumen Installer'
+VIAddVersionKey /LANG=1033 'LegalCopyright' 'Lumen modifications (c) 2026 ycoooding'
+")
+
 # Add the installer-only activation page without carrying activation checks into Lumen itself.
 set(_lumen_nsis_template_dir "${CMAKE_CURRENT_BINARY_DIR}/cpack_templates")
 file(MAKE_DIRECTORY "${_lumen_nsis_template_dir}")
@@ -16,7 +26,7 @@ cmake_path(NATIVE_PATH _lumen_activation_script NORMALIZE _lumen_activation_scri
 
 set(_lumen_nsis_include_anchor "  SetCompressor @CPACK_NSIS_COMPRESSOR@")
 set(_lumen_nsis_include_replacement
-        "${_lumen_nsis_include_anchor}\n\n  !define LUMEN_ACTIVATION_SCRIPT \"${_lumen_activation_script}\"\n  !include \"${_lumen_activation_nsh}\"")
+        "${_lumen_nsis_include_anchor}\n${_lumen_nsis_version_info}\n  !define LUMEN_ACTIVATION_SCRIPT \"${_lumen_activation_script}\"\n  !include \"${_lumen_activation_nsh}\"")
 string(FIND "${_lumen_nsis_template}" "${_lumen_nsis_include_anchor}" _lumen_nsis_include_position)
 if(_lumen_nsis_include_position EQUAL -1)
     message(FATAL_ERROR "The CPack NSIS template no longer contains the expected compressor anchor.")
@@ -43,6 +53,8 @@ set(CPACK_NSIS_EXTRA_PREINSTALL_COMMANDS
             MessageBox MB_OK|MB_ICONSTOP \\\"未通过安装授权校验，安装已取消。\\\"
             SetErrorLevel 3
             Quit
+        nsExec::ExecToLog 'net stop LumenService'
+        Pop \$0
         ")
 
 # Extra install commands
@@ -60,8 +72,11 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\install-vdd.bat\\\"'
         Pop \$0
         StrCmp \$0 '0' VddInstalled
+        StrCmp \$0 '3010' VddRestartRequired
             MessageBox MB_OK|MB_ICONSTOP 'Lumen 虚拟显示器驱动安装失败，安装无法继续。'
             Abort
+        VddRestartRequired:
+            SetRebootFlag true
         VddInstalled:
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\install-service.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\autostart-service.bat\\\"'
@@ -108,8 +123,8 @@ set(CPACK_NSIS_DELETE_ICONS_EXTRA
         Delete '\$SMPROGRAMS\\\\$MUI_TEMP\\\\${CMAKE_PROJECT_NAME}.lnk'
         ")
 
-# Checking for previous installed versions
-set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL "ON")
+# Keep configuration and the working VDD package available for upgrade rollback.
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL "OFF")
 
 set(CPACK_NSIS_URL_INFO_ABOUT "")
 set(CPACK_NSIS_CONTACT "")

@@ -859,7 +859,12 @@ namespace nvhttp {
       // We want to prepare display only if there are no active sessions at
       // the moment. This should be done before probing encoders as it could
       // change the active displays.
-      display_device::configure_display(config::video, *launch_session);
+      if (!display_device::configure_display(config::video, *launch_session)) {
+        tree.put("root.<xmlattr>.status_code", 503);
+        tree.put("root.<xmlattr>.status_message", "Failed to prepare the requested display. Repair the Lumen virtual display driver or check the GPU driver and display settings.");
+        tree.put("root.gamesession", 0);
+        return;
+      }
 
       // Probe encoders again before streaming to ensure our chosen
       // encoder matches the active GPU (which could have changed
@@ -918,12 +923,16 @@ namespace nvhttp {
     print_req<LumenHTTPS>(request);
 
     pt::ptree tree;
+    bool revert_display_configuration {false};
     auto g = util::fail_guard([&]() {
       std::ostringstream data;
 
       pt::write_xml(data, tree);
       response->write(data.str());
       response->close_connection_after_response = true;
+      if (revert_display_configuration) {
+        display_device::revert_configuration();
+      }
     });
 
     auto current_appid = proc::proc.running();
@@ -957,10 +966,16 @@ namespace nvhttp {
     const auto launch_session = make_launch_session(host_audio, args);
 
     if (no_active_sessions) {
+      revert_display_configuration = true;
       // We want to prepare display only if there are no active sessions at
       // the moment. This should be done before probing encoders as it could
       // change the active displays.
-      display_device::configure_display(config::video, *launch_session);
+      if (!display_device::configure_display(config::video, *launch_session)) {
+        tree.put("root.resume", 0);
+        tree.put("root.<xmlattr>.status_code", 503);
+        tree.put("root.<xmlattr>.status_message", "Failed to prepare the requested display. Repair the Lumen virtual display driver or check the GPU driver and display settings.");
+        return;
+      }
 
       // Probe encoders again before streaming to ensure our chosen
       // encoder matches the active GPU (which could have changed
@@ -999,6 +1014,7 @@ namespace nvhttp {
     tree.put("root.resume", 1);
 
     rtsp_stream::launch_session_raise(launch_session);
+    revert_display_configuration = false;
   }
 
   void cancel(resp_https_t response, req_https_t request) {

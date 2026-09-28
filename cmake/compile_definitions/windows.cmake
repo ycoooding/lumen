@@ -48,6 +48,11 @@ set_target_properties(sunshine_rc_object PROPERTIES
     INCLUDE_DIRECTORIES ""
 )
 
+# Give Lumen's service and diagnostic tools the same product version and icon.
+foreach(lumen_tool LumenSvc dxgi-info audio-info)
+    target_sources(${lumen_tool} PRIVATE $<TARGET_OBJECTS:sunshine_rc_object>)
+endforeach()
+
 set(PLATFORM_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/platform/windows/publish.cpp"
         "${CMAKE_SOURCE_DIR}/src/platform/windows/misc.h"

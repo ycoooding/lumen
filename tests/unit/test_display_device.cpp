@@ -74,6 +74,22 @@ TEST(DisplayDeviceAutoSelection, RejectsVirtualAndInactiveDisplays) {
   EXPECT_EQ(display_device::find_active_physical_output(devices), std::nullopt);
 }
 
+TEST(DisplayDeviceAutoSelection, FindsInactiveVirtualDisplayBeforeTopologyIsApplied) {
+  const display_device::EnumeratedDeviceList devices {
+    {.m_device_id = "physical", .m_friendly_name = "Physical", .m_info = display_device::EnumeratedDevice::Info {.m_primary = true}},
+    {.m_device_id = "virtual", .m_friendly_name = "Zako HDR"},
+  };
+  EXPECT_EQ(display_device::find_virtual_output(devices), "virtual");
+  EXPECT_EQ(display_device::find_active_physical_output(devices), "physical");
+}
+
+TEST(DisplayDeviceAutoSelection, MissingVirtualDisplayDoesNotSelectPhysicalDisplay) {
+  const display_device::EnumeratedDeviceList devices {
+    {.m_device_id = "physical", .m_friendly_name = "Physical", .m_info = display_device::EnumeratedDevice::Info {.m_primary = true}},
+  };
+  EXPECT_EQ(display_device::find_virtual_output(devices), std::nullopt);
+}
+
 using ParseDeviceId = DisplayDeviceConfigTest<std::pair<std::string, std::string>>;
 INSTANTIATE_TEST_SUITE_P(
   DisplayDeviceConfigTest,

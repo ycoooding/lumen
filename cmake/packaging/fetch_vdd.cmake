@@ -2,9 +2,9 @@
 include_guard(GLOBAL)
 
 set(LUMEN_DRIVER_CACHE "${CMAKE_BINARY_DIR}/_driver_deps")
-set(LUMEN_VDD_LATEST_DIR "${LUMEN_DRIVER_CACHE}/vdd-v0.16.2")
-set(LUMEN_VDD_WIN10_DIR "${LUMEN_DRIVER_CACHE}/vdd-v0.14.3-win10")
-set(LUMEN_NEFCON_DIR "${LUMEN_DRIVER_CACHE}/nefcon-v1.17.40")
+set(LUMEN_VDD_LATEST_DIR "${LUMEN_DRIVER_CACHE}/vdd-v0.17.5")
+set(LUMEN_VDD_WIN10_DIR "${LUMEN_DRIVER_CACHE}/vdd-v0.15.10-win10")
+set(LUMEN_NEFCON_DIR "${LUMEN_DRIVER_CACHE}/nefcon-v1.18.74")
 
 function(_lumen_fetch_archive name url sha256 archive destination required_file)
     file(MAKE_DIRECTORY "${LUMEN_DRIVER_CACHE}")
@@ -38,25 +38,25 @@ function(_lumen_fetch_archive name url sha256 archive destination required_file)
 endfunction()
 
 _lumen_fetch_archive(
-        "ZakoVDD v0.16.2"
-        "https://github.com/qiin2333/zako-vdd/releases/download/v0.16.2/zakovdd.zip"
-        "532833f7e1d14fc716d8db97099a64bf03aa01fafe4058178e89a1d7cbc0f3bd"
-        "${LUMEN_DRIVER_CACHE}/zakovdd-v0.16.2.zip"
+        "ZakoVDD v0.17.5"
+        "https://github.com/qiin2333/zako-vdd/releases/download/v0.17.5/zakovdd.zip"
+        "e4177a0c03cb0778e0cf963f552f02c295ab855e0600083f9413446b8c238f6f"
+        "${LUMEN_DRIVER_CACHE}/zakovdd-v0.17.5.zip"
         "${LUMEN_VDD_LATEST_DIR}"
         "ZakoVDD.inf")
 
 _lumen_fetch_archive(
-        "ZakoVDD v0.14.3 Win10"
-        "https://github.com/qiin2333/zako-vdd/releases/download/v0.14.3-rc1-edid13-test/ZakoVDD-edid13-issue612.zip"
-        "cb6b8eebd1f44d41fcd1d6fa837d74294458b1b564d0a96b17a59e9ad70236ee"
-        "${LUMEN_DRIVER_CACHE}/zakovdd-v0.14.3-win10.zip"
+        "ZakoVDD v0.15.10 Win10"
+        "https://github.com/qiin2333/zako-vdd/releases/download/v0.15.10/zakovdd.zip"
+        "b73331f1f319478e4718a03beee76c52883df0f90978f4ff100b15ae36fd0a46"
+        "${LUMEN_DRIVER_CACHE}/zakovdd-v0.15.10-win10.zip"
         "${LUMEN_VDD_WIN10_DIR}"
         "ZakoVDD.inf")
 
 _lumen_fetch_archive(
-        "nefcon v1.17.40"
-        "https://github.com/nefarius/nefcon/releases/download/v1.17.40/nefcon_v1.17.40.zip"
-        "812bae7ed7dfb7d6d2284bc7de2f8ccebc92ed2a0b1ae893c53b337096e50c1a"
-        "${LUMEN_DRIVER_CACHE}/nefcon-v1.17.40.zip"
+        "nefcon v1.18.74"
+        "https://github.com/nefarius/nefcon/releases/download/v1.18.74/nefcon_v1.18.74.zip"
+        "625abcdea9e84577d094ab65a8542c9977eb50f2371d216961af01cf4901f172"
+        "${LUMEN_DRIVER_CACHE}/nefcon-v1.18.74.zip"
         "${LUMEN_NEFCON_DIR}"
         "x64/nefconw.exe")

@@ -1,4 +1,5 @@
 # windows specific packaging
+set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${PROJECT_VERSION}-Windows-x64")
 include(${CMAKE_MODULE_PATH}/packaging/fetch_vdd.cmake)
 
 install(TARGETS sunshine RUNTIME DESTINATION "." COMPONENT application)
@@ -43,6 +44,7 @@ install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/path/"
 install(FILES
         "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/vdd/install-vdd.bat"
         "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/vdd/uninstall-vdd.bat"
+        "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/vdd/vdd-device-helper.ps1"
         DESTINATION "scripts"
         COMPONENT application)
 install(FILES
@@ -62,6 +64,7 @@ install(FILES
         DESTINATION "scripts/driver/win10"
         COMPONENT application)
 install(FILES "${CMAKE_SOURCE_DIR}/cmake/packaging/ZakoVDD-LICENSE.txt"
+        "${CMAKE_SOURCE_DIR}/cmake/packaging/nefcon-LICENSE.txt"
         DESTINATION "licenses"
         COMPONENT application)
 

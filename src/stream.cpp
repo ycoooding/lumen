@@ -1943,6 +1943,7 @@ namespace stream {
     }
 
     int start(session_t &session, const std::string &addr_string) {
+      display_device::cancel_pending_configuration();
       session.input = input::alloc(session.mail);
 
       session.broadcast_ref = broadcast.ref();

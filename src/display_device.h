@@ -66,14 +66,17 @@ namespace display_device {
    * configure_display(video_config, *launch_session);
    * @examples_end
    */
-  void configure_display(const config::video_t &video_config, const rtsp_stream::launch_session_t &session);
+  [[nodiscard]] bool configure_display(const config::video_t &video_config, const rtsp_stream::launch_session_t &session);
+
+  /** @brief Stop deferred display changes before capture starts. */
+  void cancel_pending_configuration();
 
   /**
    * @brief Configure the display device using the provided configuration.
    *
    * In some cases configuring display can fail due to transient issues and
-   * we will keep trying every 5 seconds, even if the stream has already started as there was
-   * no possibility to apply settings before the stream start.
+   * we will keep trying every 5 seconds until capture starts. Pending retries
+   * are cancelled before capturing so they cannot disrupt an active stream.
    *
    * Therefore, there is no return value as we still want to continue with the stream, so that
    * the users can do something about it once they are connected. Otherwise, we might
@@ -137,6 +140,9 @@ namespace display_device {
    * @return Device ID, or no value when only virtual/inactive displays exist.
    */
   [[nodiscard]] std::optional<std::string> find_active_physical_output(const EnumeratedDeviceList &devices);
+
+  /** @brief Find a virtual display even when Windows has not activated it yet. */
+  [[nodiscard]] std::optional<std::string> find_virtual_output(const EnumeratedDeviceList &devices);
 
   /**
    * @brief A tag structure indicating that configuration parsing has failed.

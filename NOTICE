@@ -1,4 +1,4 @@
-Lumen 1.0.0 is an independent modified version of Sunshine v2025.924.154138.
+Lumen 1.1.0 is an independent modified version of Sunshine v2025.924.154138.
 Sunshine is maintained by LizardByte and its contributors:
 https://github.com/LizardByte/Sunshine
 
@@ -12,3 +12,15 @@ rights reserved.
 
 ZakoVDD is distributed under the MIT License. Its license text is available at:
 cmake/packaging/ZakoVDD-LICENSE.txt
+
+Virtual display integration and driver installation updates are adapted from
+Foundation Sunshine v2026.927.163942 (GPL-3.0), maintained by AlkaidLab and
+its contributors:
+https://github.com/AlkaidLab/foundation-sunshine/tree/1e9660f391e8b6eb54d4326d4b2143bbbb4d9bb0
+Bundled ZakoVDD: v0.17.5 (Windows 11), v0.15.10 (Windows 10).
+https://github.com/qiin2333/zako-vdd
+
+Bundled nefcon v1.18.74 is distributed under the MIT License.
+Copyright (c) 2022-2025 Nefarius Software Solutions e.U.
+https://github.com/nefarius/nefcon/tree/v1.18.74
+License text: cmake/packaging/nefcon-LICENSE.txt
