@@ -110,6 +110,27 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC ${SUNSHINE_DEFINITIONS} ${TEST
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${SUNSHINE_COMPILE_OPTIONS}>;$<$<COMPILE_LANGUAGE:CUDA>:${SUNSHINE_COMPILE_OPTIONS_CUDA};-std=c++17>)  # cmake-lint: disable=C0301
 target_link_options(${PROJECT_NAME} PRIVATE)
 
+# Exercise the real Windows send functions without depending on NIC USO support.
+# The wrapper is linked only into tests, never into Lumen.
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(${PROJECT_NAME} PRIVATE "-Wl,--wrap=WSASendMsg")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LUMEN_TEST_WRAP_SENDMSG)
+
+    # Compile the existing stream fallback verbatim into the regression fixture.
+    # Keep production packet indexing, FEC, encryption and pacing untouched.
+    file(READ "${CMAKE_SOURCE_DIR}/src/stream.cpp" _lumen_stream_source)
+    string(FIND "${_lumen_stream_source}" "if (!platf::send_batch(batch_info)) {" _lumen_fallback_start)
+    string(FIND "${_lumen_stream_source}" "frame_send_batch_latency_logger.second_point_now_and_log();" _lumen_fallback_end)
+    if(_lumen_fallback_start LESS 0 OR _lumen_fallback_end LESS _lumen_fallback_start)
+        message(FATAL_ERROR "Could not locate the stream batch fallback for regression tests")
+    endif()
+    math(EXPR _lumen_fallback_size "${_lumen_fallback_end} - ${_lumen_fallback_start}")
+    string(SUBSTRING "${_lumen_stream_source}" ${_lumen_fallback_start} ${_lumen_fallback_size} _lumen_fallback)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stream_batch_fallback.inc" "${_lumen_fallback}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/stream.cpp")
+    target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 if (WIN32)
     # prefer static libraries since we're linking statically
     # this fixes libcurl linking errors when using non MSYS2 version of CMake

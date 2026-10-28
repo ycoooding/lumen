@@ -145,6 +145,14 @@ const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort
       <div class="form-text">{{ $t('config.wan_encryption_mode_desc') }}</div>
     </div>
 
+    <!-- Windows UDP segmentation offload -->
+    <Checkbox v-if="platform === 'windows'" class="mb-3"
+              id="udp_segmentation_offload"
+              locale-prefix="config"
+              v-model="config.udp_segmentation_offload"
+              :default="false"
+    ></Checkbox>
+
     <!-- Ping Timeout -->
     <div class="mb-3">
       <label for="ping_timeout" class="form-label">{{ $t('config.ping_timeout') }}</label>

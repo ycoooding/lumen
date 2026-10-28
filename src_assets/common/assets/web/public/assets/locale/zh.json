@@ -82,6 +82,8 @@
     "working_dir_desc": "应传递给进程的工作目录。例如，某些应用程序使用工作目录搜索配置文件。如果不设置，Lumen 将默认使用命令的父目录"
   },
   "config": {
+    "udp_segmentation_offload": "UDP 分段卸载（USO）",
+    "udp_segmentation_offload_desc": "启用可降低批量发送的 CPU 开销；部分网卡或驱动可能存在兼容性问题，遇到串流异常时可尝试关闭。保存并重启 Lumen 后生效。",
     "adapter_name": "适配器名称",
     "adapter_name_desc_linux_1": "手动指定用于捕获的 GPU。",
     "adapter_name_desc_linux_2": "找到所有能够使用 VAAPI 的设备",

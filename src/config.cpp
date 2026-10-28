@@ -524,6 +524,7 @@ namespace config {
 
     ENCRYPTION_MODE_NEVER,  // lan_encryption_mode
     ENCRYPTION_MODE_OPPORTUNISTIC,  // wan_encryption_mode
+    false,  // udp_segmentation_offload (also the default for older config files)
   };
 
   nvhttp_t nvhttp {
@@ -1179,6 +1180,7 @@ namespace config {
 
     int_between_f(vars, "lan_encryption_mode", stream.lan_encryption_mode, {0, 2});
     int_between_f(vars, "wan_encryption_mode", stream.wan_encryption_mode, {0, 2});
+    bool_f(vars, "udp_segmentation_offload", stream.udp_segmentation_offload);
 
     path_f(vars, "file_apps", stream.file_apps);
     int_between_f(vars, "fec_percentage", stream.fec_percentage, {1, 255});

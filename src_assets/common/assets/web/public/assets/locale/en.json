@@ -82,6 +82,8 @@
     "working_dir_desc": "The working directory that should be passed to the process. For example, some applications use the working directory to search for configuration files. If not set, Lumen will default to the parent directory of the command"
   },
   "config": {
+    "udp_segmentation_offload": "UDP segmentation offload (USO)",
+    "udp_segmentation_offload_desc": "Enabling this can reduce CPU overhead for batch sends. Some network adapters or drivers may have compatibility issues; try disabling it if streaming behaves abnormally. Takes effect after saving and restarting Lumen.",
     "adapter_name": "Adapter Name",
     "adapter_name_desc_linux_1": "Manually specify a GPU to use for capture.",
     "adapter_name_desc_linux_2": "to find all devices capable of VAAPI",

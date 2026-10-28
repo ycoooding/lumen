@@ -1660,6 +1660,20 @@ editing the `conf` file in a text editor. Use the examples as reference.
     </tr>
 </table>
 
+### udp_segmentation_offload
+
+Windows only. Enables UDP segmentation offload (USO) for multi-packet video sends.
+This can reduce CPU overhead, but some network adapters or drivers may have compatibility issues.
+Disable it if streaming behaves abnormally. Save and restart Lumen for changes to take effect.
+This does not change the system network adapter settings. Single-packet sends are unchanged.
+
+Default: `false` (also used when the option is absent in an older configuration).
+
+Example:
+@code{}
+udp_segmentation_offload = true
+@endcode
+
 ### ping_timeout
 
 <table>

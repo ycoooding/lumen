@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iterator>
+#include <mutex>
 #include <set>
 #include <sstream>
 
@@ -40,6 +41,7 @@
 // local includes
 #include "misc.h"
 #include "nvprefs/nvprefs_interface.h"
+#include "src/config.h"
 #include "src/entry_handler.h"
 #include "src/globals.h"
 #include "src/logging.h"
@@ -1349,6 +1351,14 @@ namespace platf {
   // Use UDP segmentation offload if it is supported by the OS. If the NIC is capable, this will use
   // hardware acceleration to reduce CPU usage. Support for USO was introduced in Windows 10 20H1.
   bool send_batch(batched_send_info_t &send_info) {
+    if (!config::stream.udp_segmentation_offload && send_info.block_count > 1) {
+      static std::once_flag fallback_logged;
+      std::call_once(fallback_logged, [] {
+        BOOST_LOG(info) << "UDP segmentation offload (USO) disabled: bypassing multi-packet batch; stream.cpp per-packet send fallback is active.";
+      });
+      return false;
+    }
+
     WSAMSG msg;
 
     // Convert the target address into a SOCKADDR

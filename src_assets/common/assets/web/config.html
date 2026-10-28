@@ -196,6 +196,7 @@
               "external_ip": "",
               "lan_encryption_mode": 0,
               "wan_encryption_mode": 1,
+              "udp_segmentation_offload": false,
               "ping_timeout": 10000,
             },
           },
@@ -361,6 +362,11 @@
         this.tabs.forEach(tab => {
           Object.keys(tab.options).forEach(optionKey => {
             let delete_value = false
+
+            // Persist the USO choice explicitly, including boolean false.
+            if (optionKey === "udp_segmentation_offload") {
+              return;
+            }
 
             // todo: add proper type checking
             if (JSON.stringify(config[optionKey]) === JSON.stringify(tab.options[optionKey])) {

@@ -5,6 +5,11 @@ if(DEFINED ENV{BRANCH})
 endif()
 if(DEFINED ENV{BUILD_VERSION})  # cmake-lint: disable=W0106
     set(BUILD_VERSION $ENV{BUILD_VERSION})
+    string(REGEX REPLACE "^v" "" _lumen_requested_version "${BUILD_VERSION}")
+    if(NOT "${_lumen_requested_version}" STREQUAL "" AND
+       NOT "${_lumen_requested_version}" STREQUAL "${CMAKE_PROJECT_VERSION}")
+        message(FATAL_ERROR "BUILD_VERSION must match the declared Lumen version ${CMAKE_PROJECT_VERSION}; refusing an inconsistent release.")
+    endif()
 endif()
 if(DEFINED ENV{CLONE_URL})
     set(GITHUB_CLONE_URL $ENV{CLONE_URL})
@@ -22,9 +27,8 @@ if((DEFINED ENV{BRANCH}) AND (DEFINED ENV{BUILD_VERSION}))  # cmake-lint: disabl
         # If BRANCH is defined and BUILD_VERSION is not empty, then we are building from CI
         # If BRANCH is master we are building a push/release build
         MESSAGE("Got from CI '$ENV{BRANCH}' branch and version '$ENV{BUILD_VERSION}'")
-        set(PROJECT_VERSION $ENV{BUILD_VERSION})
-        string(REGEX REPLACE "^v" "" PROJECT_VERSION ${PROJECT_VERSION})  # remove the v prefix if it exists
-        set(CMAKE_PROJECT_VERSION ${PROJECT_VERSION})  # cpack will use this to set the binary versions
+        # The declared project version is authoritative, including in CI.
+        # BUILD_VERSION was validated above and must never silently override it.
     endif()
 else()
     # Keep the declared Lumen version stable; Git is used only for build metadata.

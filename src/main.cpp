@@ -166,6 +166,13 @@ int main(int argc, char *argv[]) {
   // Log publisher metadata
   log_publisher_data();
 
+#ifdef _WIN32
+  BOOST_LOG(info) << "UDP segmentation offload (USO): "
+                  << (config::stream.udp_segmentation_offload ? "enabled" : "disabled")
+                  << " (udp_segmentation_offload="
+                  << (config::stream.udp_segmentation_offload ? "true" : "false") << ")";
+#endif
+
   // Log modified_config_settings
   for (auto &[name, val] : config::modified_config_settings) {
     BOOST_LOG(info) << "config: '"sv << name << "' = "sv << val;
